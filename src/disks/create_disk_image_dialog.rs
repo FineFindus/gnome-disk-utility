@@ -226,15 +226,8 @@ impl GduCreateDiskImageDialog {
         let name = imp.name_entry.text();
         let mut output_file_path = imp.directory_path.take();
         output_file_path.push(&name);
-        let output_file = gio::File::for_path(&output_file_path);
-        //TODO: use rust File for reading
-        let output_file_stream = match output_file.replace(
-            None,
-            false,
-            gio::FileCreateFlags::NONE,
-            gio::Cancellable::NONE,
-        ) {
-            Ok(stream) => stream,
+        let mut output_file = match std::fs::File::create(&output_file_path) {
+            Ok(file) => file,
             Err(err) => {
                 libgdu::show_error(
                     self,
@@ -266,7 +259,7 @@ impl GduCreateDiskImageDialog {
                 &device,
                 &block,
                 &drive,
-                &mut output_file_stream.into_write(),
+                &mut output_file,
             )
             .await;
 
