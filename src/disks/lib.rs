@@ -1,5 +1,6 @@
 mod config;
 
+mod create_disk_image_dialog;
 mod estimator;
 mod ffi;
 mod gdu_combo_row;

@@ -8,7 +8,10 @@ use std::{
 use gtk::glib::{self, translate::FromGlibPtrBorrow};
 use udisks::zbus::zvariant::OwnedObjectPath;
 
-use crate::{GduRestoreDiskImageDialog, localjob::LocalJob};
+use crate::{
+    GduRestoreDiskImageDialog, create_disk_image_dialog::GduCreateDiskImageDialog,
+    localjob::LocalJob,
+};
 
 //FIXME: move this to Gdu application once ported
 // GTK is single threaded
@@ -90,5 +93,27 @@ pub extern "C" fn gdu_rs_restore_disk_image_dialog_show(
             disk_image_filename.as_deref(),
         )
         .await;
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn gdu_rs_create_disk_image_dialog_show(
+    window_ptr: *mut gtk::ffi::GtkWindow,
+    object_path: *const c_char,
+) {
+    //SAFETY: the C side has already initialized gtk
+    unsafe { gtk::set_initialized() }
+    let parent_window = unsafe { gtk::Window::from_glib_borrow(window_ptr) };
+    let object_path = read_nullable_cstr(object_path);
+
+    glib::MainContext::default().spawn_local(async move {
+        let client = udisks::Client::new()
+            .await
+            .expect("Failed to create udisks client");
+        let object = object_path
+            .and_then(|p| client.object(p).ok())
+            .expect("`object_path` should be valid");
+
+        GduCreateDiskImageDialog::show(parent_window.as_ref(), object, client).await;
     });
 }

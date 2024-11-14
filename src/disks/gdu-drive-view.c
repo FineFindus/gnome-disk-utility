@@ -30,6 +30,8 @@
 #include "gdu-drive-view.h"
 #include "gdu-space-allocation-bar.h"
 
+#include "gdu-rust.h"
+
 enum
 {
   PROP_0,
@@ -178,6 +180,7 @@ create_disk_image_clicked_cb (GtkWidget  *widget,
   GduDriveView *self = GDU_DRIVE_VIEW (widget);
   UDisksObject *object;
   GduManager *manager;
+  const gchar *object_path;
 
   g_assert (GDU_IS_DRIVE_VIEW (self));
 
@@ -185,9 +188,9 @@ create_disk_image_clicked_cb (GtkWidget  *widget,
   manager = gdu_manager_get_default (NULL);
   g_assert (object != NULL);
 
-  gdu_create_disk_image_dialog_show (drive_view_get_window (self),
-                                     object,
-                                     gdu_manager_get_client (manager));
+  object_path = g_dbus_object_get_object_path (G_DBUS_OBJECT (object));
+  gdu_rs_create_disk_image_dialog_show (drive_view_get_window (self),
+                                     object_path);
 }
 
 static void

@@ -12,3 +12,7 @@ gdu_rs_has_local_jobs ();
 
 extern void
 gdu_rs_local_jobs_clear ();
+
+extern void
+gdu_rs_create_disk_image_dialog_show(GtkWindow *parent_window,
+                                     const gchar *object_path);
