@@ -314,7 +314,7 @@ impl GduCreateDiskImageDialog {
         block: &udisks::block::BlockProxy<'static>,
         drive: &udisks::drive::DriveProxy<'static>,
         output_file: &mut impl std::io::Write,
-    ) -> Result<(usize, i32), Box<dyn std::error::Error>> {
+    ) -> Result<(usize, u64), Box<dyn std::error::Error>> {
         let Ok(mut device) = (if device.starts_with("/dev/sr") {
             let file = std::fs::File::open(device);
             if block.id_usage().await.is_ok_and(|id| id == "filesystem")
@@ -351,7 +351,7 @@ impl GduCreateDiskImageDialog {
         const BLKGETSIZE64: u64 = 0x80081272;
 
         // TODO: this is also used in restore dialog, abstract this to a common implementation
-        let mut block_device_size: i32 = 0;
+        let mut block_device_size: u64 = 0;
         if unsafe { libc::ioctl(device.as_raw_fd(), BLKGETSIZE64, &mut block_device_size) } != 0 {
             log::error!("Error determining size of device");
             return Err(Box::new(std::io::Error::from(
@@ -387,7 +387,7 @@ impl GduCreateDiskImageDialog {
         let mut page_buffer = PageAlignedBuffer::new(BUFFER_SIZE);
         let buffer = page_buffer.as_mut_slice();
 
-        let estimator = GduEstimator::new(block_device_size as u64);
+        let estimator = GduEstimator::new(block_device_size);
 
         // Read huge (e.g. 1 MiB) blocks and write it to the output file even if it was only
         // partially read

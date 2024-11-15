@@ -526,7 +526,7 @@ impl GduRestoreDiskImageDialog {
             log::error!("Device is size 0");
             return Err(std::io::Error::from(std::io::ErrorKind::InvalidData).into());
         }
-        self.imp().block_size.set(block_device_size as u64);
+        self.imp().block_size.set(block_device_size);
 
         // default to 1 MiB blocks
         const BUFFER_SIZE: usize = 1024 * 1024;
