@@ -371,21 +371,18 @@ impl GduCreateDiskImageDialog {
             )));
         }
 
-        //TODO: fallocate
-        // unsafe {
-        //     match libc::fallocate(device.as_raw_fd(), 0, 0, block_device_size as i64) {
-        //         // kernel or filesystem does not support fallocate, ignore
-        //         0 | libc::ENOSYS | libc::EOPNOTSUPP => {
-        //         log::debug!("`fallocate` successful")
-        //         }
-        //         err => {
-        //             log::error!("Failed to fallocate file: {err}");
-        //             return Err(Box::new(std::io::Error::from(
-        //                 std::io::ErrorKind::InvalidData,
-        //             )));
-        //         }
-        //     };
-        // }
+        match allocate_file_size(output_file, block_device_size as i64) {
+            // kernel or filesystem does not support fallocate, ignore
+            Ok(()) | Err(libc::ENOSYS) | Err(libc::EOPNOTSUPP) => {
+                log::debug!("`fallocate` successful");
+            }
+            Err(err) => {
+                log::error!("Failed to fallocate file: {err}");
+                return Err(Box::new(std::io::Error::from(
+                    std::io::ErrorKind::InvalidData,
+                )));
+            }
+        };
 
         // default to 1 MiB blocks
         const BUFFER_SIZE: usize = 1024 * 1024;
@@ -454,4 +451,18 @@ impl GduCreateDiskImageDialog {
             };
         //TODO: update job
     }
+}
+
+/// Allocates `size` disk space for `file`.
+///
+/// # Errors
+///
+/// Returns the error code of the underlying `fallocate` call.
+fn allocate_file_size(file: &mut std::fs::File, size: i64) -> Result<(), i32> {
+    if unsafe { libc::fallocate(file.as_raw_fd(), 0, 0, size) } != 0 {
+        return Err(std::io::Error::last_os_error()
+            .raw_os_error()
+            .expect("`last_os_error` must be set as `fallocate` failed"));
+    }
+    Ok(())
 }
