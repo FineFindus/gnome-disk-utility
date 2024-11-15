@@ -1,5 +1,5 @@
 use std::ffi::CString;
-use std::io::{ErrorKind, Read};
+use std::io::{ErrorKind, Read, Write};
 use std::ops::Sub;
 use std::os::fd::AsRawFd;
 use std::path::PathBuf;
@@ -253,12 +253,7 @@ impl GduCreateDiskImageDialog {
         //TODO: create job
 
         let copy_res = self
-            .copy_device(
-                &device,
-                &block,
-                &drive,
-                &mut output_file,
-            )
+            .copy_device(&device, &block, &drive, &mut output_file)
             .await;
 
         application.uninhibit(inhibit_cookie);
@@ -315,7 +310,7 @@ impl GduCreateDiskImageDialog {
         device: &str,
         block: &udisks::block::BlockProxy<'static>,
         drive: &udisks::drive::DriveProxy<'static>,
-        output_file: &mut impl std::io::Write,
+        output_file: &mut std::fs::File,
     ) -> Result<(usize, u64), Box<dyn std::error::Error>> {
         let Ok(mut device) = (if device.starts_with("/dev/sr") {
             let file = std::fs::File::open(device);
