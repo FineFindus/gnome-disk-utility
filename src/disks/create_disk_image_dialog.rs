@@ -281,7 +281,7 @@ impl GduCreateDiskImageDialog {
             let percentage = 100.0 * zero_bytes as f64 / block_size as f64;
             //TODO: also show this when another error occured?
             //TODO: why even continue to copy the disk, instead of exiting early?
-            let response = libgdu::ConfirmationDialog { 
+            let response = libgdu::ConfirmationDialog {
                 // Translators: Heading in dialog shown if some data was unreadable while creating a disk image
                 message: gettext("Unrecoverable read errors"),
                 // Translators: Body in dialog shown if some data was unreadable while creating a disk image.
@@ -298,8 +298,12 @@ impl GduCreateDiskImageDialog {
             }
 
             //TODO: use async remove?
-            if let Err(err) = std::fs::remove_file(&output_file_path){
-               log::error!("Error deleting file: {} ({})", output_file_path.display(), err);
+            if let Err(err) = std::fs::remove_file(&output_file_path) {
+                log::error!(
+                    "Error deleting file: {} ({})",
+                    output_file_path.display(),
+                    err
+                );
             }
         }
 
@@ -331,7 +335,8 @@ impl GduCreateDiskImageDialog {
             // request the file from udisks directly
             let fd: std::os::fd::OwnedFd = block
                 .open_for_backup(std::collections::HashMap::new())
-                .await?.into();
+                .await?
+                .into();
             let file = std::fs::File::from(fd);
             Ok(file)
         }) else {
@@ -429,12 +434,11 @@ impl GduCreateDiskImageDialog {
                 return Err(Box::new(err));
             }
             bytes_completed += read_bytes as u64;
-        };
+        }
         log::info!("successfully copied disk image");
 
         Ok((padded_bytes, block_device_size))
     }
-
 
     fn update_job(&self, estimator: Option<&GduEstimator>, done: bool) {
         let (bytes_per_sec, usec_remaining, completed_bytes, target_bytes) =
