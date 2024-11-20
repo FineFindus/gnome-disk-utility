@@ -166,8 +166,10 @@ impl GduCreateDiskImageDialog {
 
     #[template_callback]
     async fn on_choose_folder_button_clicked_cb(&self) {
+        let directory_path = self.imp().directory_path.borrow().clone();
         let file_dialog = gtk::FileDialog::builder()
             .title(gettext("Choose a location to save the disk image."))
+            .initial_folder(&gio::File::for_path(directory_path))
             .build();
         if let Some(file_path) = file_dialog
             .select_folder_future(Some(self))
@@ -237,10 +239,6 @@ impl GduCreateDiskImageDialog {
                 return None;
             }
         };
-
-        // TODO: (gtk4)
-        // now that we know the user picked a folder, update file chooser settings
-        // gdu_utils_file_chooser_for_disk_images_set_default_folder (folder);
 
         let application = self.application().unwrap_or_default();
         let inhibit_cookie = application.inhibit(

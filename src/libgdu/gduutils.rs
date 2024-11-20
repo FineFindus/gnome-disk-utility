@@ -912,7 +912,7 @@ pub async fn unuse_data_iterate(
                         .map_err(|err| {
                             (err, gettext("Error disabling autoclear for loop device"))
                         })?;
-                   Box::pin(unuse_data_iterate(client, object)).await?;
+                    Box::pin(unuse_data_iterate(client, object)).await?;
                     return Ok(());
                 }
             }
