@@ -1,10 +1,11 @@
 use std::ffi::CString;
-use std::io::{ErrorKind, Read, Write};
+use std::io::ErrorKind;
 use std::ops::Sub;
 use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 
 use adw::prelude::*;
+use async_std::io::{ReadExt, WriteExt};
 use gettextrs::{gettext, pgettext};
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
@@ -204,6 +205,7 @@ impl GduCreateDiskImageDialog {
         if response == libgdu::ConfirmationDialogResponse::Cancel {
             return;
         }
+
         self.create_disk_image().await;
     }
 
@@ -228,7 +230,7 @@ impl GduCreateDiskImageDialog {
         let name = imp.name_entry.text();
         let mut output_file_path = imp.directory_path.take();
         output_file_path.push(&name);
-        let mut output_file = match std::fs::File::create(&output_file_path) {
+        let mut output_file = match async_std::fs::File::create(&output_file_path).await {
             Ok(file) => file,
             Err(err) => {
                 libgdu::show_error(
@@ -310,10 +312,10 @@ impl GduCreateDiskImageDialog {
         device: &str,
         block: &udisks::block::BlockProxy<'static>,
         drive: &udisks::drive::DriveProxy<'static>,
-        output_file: &mut std::fs::File,
+        output_file: &mut async_std::fs::File,
     ) -> Result<(usize, u64), Box<dyn std::error::Error>> {
-        let Ok(mut device) = (if device.starts_with("/dev/sr") {
-            let file = std::fs::File::open(device);
+        let mut device: async_std::fs::File = if device.starts_with("/dev/sr") {
+            let file = std::fs::File::open(device)?;
             if block.id_usage().await.is_ok_and(|id| id == "filesystem")
                 && block.id_type().await.is_ok_and(|id| id == "udf")
                 && drive
@@ -323,7 +325,7 @@ impl GduCreateDiskImageDialog {
             {
                 todo!("Handle libdvdcss");
             }
-            file
+            file.into()
         } else {
             // request the file from udisks directly
             let fd: std::os::fd::OwnedFd = block
@@ -331,11 +333,7 @@ impl GduCreateDiskImageDialog {
                 .await?
                 .into();
             let file = std::fs::File::from(fd);
-            Ok(file)
-        }) else {
-            return Err(Box::new(std::io::Error::from(
-                std::io::ErrorKind::InvalidData,
-            )));
+            file.into()
         };
 
         // We can't use udisks_block_get_size() because the media may have
@@ -404,7 +402,7 @@ impl GduCreateDiskImageDialog {
             //TODO: check if using kernel calls like std's (file) copy does is faster
             //or using BufWriter
             //or BufReader
-            let read_bytes = match device.read(buffer) {
+            let read_bytes = match device.read(buffer).await {
                 // we finished reading all bytes
                 Ok(0) => break,
                 Ok(n) if n < buffer.len() => {
@@ -451,7 +449,7 @@ impl GduCreateDiskImageDialog {
 /// # Errors
 ///
 /// Returns the error code of the underlying `fallocate` call.
-fn allocate_file_size(file: &mut std::fs::File, size: i64) -> Result<(), i32> {
+fn allocate_file_size(file: &mut async_std::fs::File, size: i64) -> Result<(), i32> {
     if unsafe { libc::fallocate(file.as_raw_fd(), 0, 0, size) } != 0 {
         return Err(std::io::Error::last_os_error()
             .raw_os_error()
