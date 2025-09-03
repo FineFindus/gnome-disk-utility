@@ -23,7 +23,6 @@
 #include "gdu-mount-options-dialog.h"
 #include "gdu-benchmark-dialog.h"
 #include "gdu-encryption-options-dialog.h"
-#include "gdu-create-disk-image-dialog.h"
 #include "gdu-format-volume-dialog.h"
 #include "gdu-edit-filesystem-dialog.h"
 #include "gdu-change-passphrase-dialog.h"
@@ -935,12 +934,13 @@ create_partition_image_cb (GtkWidget  *widget,
 {
   GduBlockRow *self = GDU_BLOCK_ROW (widget);
   UDisksObject *object;
+  const gchar *object_path;
 
   object = gdu_block_get_object (self->block);
   g_assert (object != NULL);
-  gdu_create_disk_image_dialog_show (block_row_get_window (self),
-                                     object,
-                                     block_row_get_client ());
+  object_path = g_dbus_object_get_object_path (G_DBUS_OBJECT (object));
+  gdu_rs_create_disk_image_dialog_show (block_row_get_window (self),
+                                     object_path);
 }
 
 static void

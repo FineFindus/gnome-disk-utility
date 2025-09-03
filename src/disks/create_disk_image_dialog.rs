@@ -11,13 +11,13 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use libgdu::gettext::gettext_f;
 
-use crate::estimator::GduEstimator;
-use crate::page_buffer::PageAlignedBuffer;
+use crate::estimator::Estimator;
+use crate::page_aligned_buffer::PageAlignedBuffer;
 
 mod imp {
-    use std::cell::RefCell;
+    use std::{cell::RefCell, rc::Rc};
 
-    use adw::subclass::window::AdwWindowImpl;
+    use adw::subclass::dialog::AdwDialogImpl;
 
     use crate::config;
 
@@ -44,7 +44,7 @@ mod imp {
     impl ObjectSubclass for GduCreateDiskImageDialog {
         const NAME: &'static str = "GduCreateDiskImageDialog";
         type Type = super::GduCreateDiskImageDialog;
-        type ParentType = adw::Window;
+        type ParentType = adw::Dialog;
 
         fn class_init(klass: &mut Self::Class) {
             klass.bind_template();
@@ -73,27 +73,23 @@ mod imp {
     }
 
     impl WidgetImpl for GduCreateDiskImageDialog {}
-    impl WindowImpl for GduCreateDiskImageDialog {}
-    impl AdwWindowImpl for GduCreateDiskImageDialog {}
+    impl AdwDialogImpl for GduCreateDiskImageDialog {}
 }
 
 glib::wrapper! {
     pub struct GduCreateDiskImageDialog(ObjectSubclass<imp::GduCreateDiskImageDialog>)
-        @extends gtk::Widget, gtk::Window, adw::Window,
+        @extends gtk::Widget, adw::Dialog,
         @implements gio::ActionMap, gio::ActionGroup, gtk::Root;
 }
 
 #[gtk::template_callbacks]
 impl GduCreateDiskImageDialog {
     pub async fn show(
-        parent_window: &impl IsA<gtk::Window>,
+        parent_window: &impl IsA<gtk::Widget>,
         object: udisks::Object,
         client: udisks::Client,
     ) {
-        let dialog: Self = glib::Object::builder()
-            .property("application", parent_window.application())
-            .property("transient-for", parent_window)
-            .build();
+        let dialog: Self = glib::Object::new();
         let imp = dialog.imp();
         let block = object.block().await.expect("`object` should be a block");
         imp.drive.replace(client.drive_for_block(&block).await.ok());
@@ -111,9 +107,15 @@ impl GduCreateDiskImageDialog {
             glib::user_special_dir(glib::UserDirectory::Documents).unwrap_or_default();
         dialog.update_directory(directory_path);
 
-        dialog.present();
+        dialog.present(parent_window);
     }
 
+    /// Returns a the [`gtk::Window`] of the dialog.
+    fn window(&self) -> Option<gtk::Window> {
+        self.ancestor(gtk::Window::static_type()).and_downcast()
+    }
+
+    /// Returns the [udisks::Client].
     fn client(&self) -> udisks::Client {
         self.imp().client.borrow().clone().unwrap()
     }
@@ -167,13 +169,13 @@ impl GduCreateDiskImageDialog {
 
     #[template_callback]
     async fn on_choose_folder_button_clicked_cb(&self) {
-        let directory_path = self.imp().directory_path.borrow().clone();
+        let directory_path = self.imp().directory_path.borrow();
         let file_dialog = gtk::FileDialog::builder()
             .title(gettext("Choose a location to save the disk image."))
-            .initial_folder(&gio::File::for_path(directory_path))
+            .initial_folder(&gio::File::for_path(&*directory_path))
             .build();
         if let Some(file_path) = file_dialog
-            .select_folder_future(Some(self))
+            .select_folder_future(self.window().as_ref())
             .await
             .ok()
             .and_then(|file| file.path())
@@ -237,12 +239,13 @@ impl GduCreateDiskImageDialog {
                     self,
                     &gettext("Error opening file for writing"),
                     Box::new(err),
-                );
+                )
+                .await;
                 return None;
             }
         };
 
-        let application = self.application().unwrap_or_default();
+        let application = self.window()?.application().unwrap_or_default();
         let inhibit_cookie = application.inhibit(
             self.native().and_downcast_ref::<gtk::Window>(),
             gtk::ApplicationInhibitFlags::SUSPEND | gtk::ApplicationInhibitFlags::LOGOUT,
@@ -380,7 +383,7 @@ impl GduCreateDiskImageDialog {
         let mut page_buffer = PageAlignedBuffer::new(BUFFER_SIZE);
         let buffer = page_buffer.as_mut_slice();
 
-        let estimator = GduEstimator::new(block_device_size);
+        let estimator = Estimator::new(block_device_size);
 
         // Read huge (e.g. 1 MiB) blocks and write it to the output file even if it was only
         // partially read
@@ -390,7 +393,7 @@ impl GduCreateDiskImageDialog {
         let update_timer = std::time::Instant::now().sub(update_interval);
         let mut padded_bytes = 0;
         loop {
-            // Update GUI - but only every 200ms and if the last update isn't peding
+            // Update GUI - but only every 200ms and if the last update isn't pending
             if update_timer.elapsed() >= update_interval {
                 if bytes_completed > 0 {
                     estimator.add_sample(bytes_completed);
@@ -417,7 +420,7 @@ impl GduCreateDiskImageDialog {
                 Err(err) => return Err(Box::new(err)),
             };
 
-            if let Err(err) = output_file.write_all(&buffer[..read_bytes]) {
+            if let Err(err) = output_file.write_all(&buffer[..read_bytes]).await {
                 log::error!("Error writing to device: {}", err);
                 return Err(Box::new(err));
             }

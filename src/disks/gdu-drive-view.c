@@ -23,7 +23,6 @@
 #include "gdu-item.h"
 #include "gdu-manager.h"
 #include "gdu-benchmark-dialog.h"
-#include "gdu-create-disk-image-dialog.h"
 #include "gdu-disk-settings-dialog.h"
 #include "gdu-format-disk-dialog.h"
 #include "gdu-drive-header.h"

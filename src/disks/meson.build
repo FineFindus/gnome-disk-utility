@@ -80,7 +80,6 @@ sources = files(
   'gdu-create-other-page.c',
   'gdu-create-partition-page.c',
   'gdu-create-password-page.c',
-  'gdu-create-disk-image-dialog.c',
   'gdu-edit-filesystem-dialog.c',
   'gdu-edit-partition-dialog.c',
   'gdu-encryption-options-dialog.c',
