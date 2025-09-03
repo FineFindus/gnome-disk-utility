@@ -264,7 +264,7 @@ impl GduCreateDiskImageDialog {
         application.uninhibit(inhibit_cookie);
 
         if let Err(err) = copy_res {
-            libgdu::show_error(self, &gettext("Error creating disk image"), err);
+            libgdu::show_error(self, &gettext("Error creating disk image"), err).await;
             //TODO: use same return as happy path
             self.set_visible(false);
             self.close();
@@ -277,7 +277,7 @@ impl GduCreateDiskImageDialog {
         let (zero_bytes, block_size) = copy_res.unwrap();
         if zero_bytes > 0 {
             let percentage = 100.0 * zero_bytes as f64 / block_size as f64;
-            //TODO: also show this when another error occured?
+            //TODO: also show this when another error occurred?
             //TODO: why even continue to copy the disk, instead of exiting early?
             let response = libgdu::ConfirmationDialog {
                 // Translators: Heading in dialog shown if some data was unreadable while creating a disk image
