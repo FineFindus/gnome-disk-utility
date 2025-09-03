@@ -385,7 +385,7 @@ impl GduCreateDiskImageDialog {
 
         match allocate_file_size(output_file, block_device_size as i64) {
             // kernel or filesystem does not support fallocate, ignore
-            Ok(()) | Err(libc::ENOSYS) | Err(libc::EOPNOTSUPP) => {
+            Ok(()) | Err(libc::ENOSYS | libc::EOPNOTSUPP) => {
                 log::debug!("`fallocate` successful");
             }
             Err(err) => {
