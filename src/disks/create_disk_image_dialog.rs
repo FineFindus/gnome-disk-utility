@@ -12,6 +12,7 @@ use gtk::{gio, glib};
 use libgdu::gettext::gettext_f;
 
 use crate::estimator::Estimator;
+use crate::ffi;
 use crate::page_aligned_buffer::PageAlignedBuffer;
 
 mod imp {
@@ -19,7 +20,7 @@ mod imp {
 
     use adw::subclass::dialog::AdwDialogImpl;
 
-    use crate::config;
+    use crate::{config, localjob::LocalJob};
 
     use super::*;
 
@@ -31,6 +32,7 @@ mod imp {
         pub(super) block: RefCell<Option<udisks::block::BlockProxy<'static>>>,
         pub(super) drive: RefCell<Option<udisks::drive::DriveProxy<'static>>>,
         pub(super) directory_path: RefCell<std::path::PathBuf>,
+        pub(super) local_job: RefCell<Option<Rc<LocalJob>>>,
 
         #[template_child]
         pub(super) name_entry: TemplateChild<adw::EntryRow>,
@@ -69,6 +71,10 @@ mod imp {
 
         fn dispose(&self) {
             self.dispose_template();
+
+            if let Some(job) = self.local_job.take() {
+                ffi::destroy_local_job(job);
+            }
         }
     }
 
@@ -255,7 +261,14 @@ impl GduCreateDiskImageDialog {
                 "Copying device to disk image",
             )),
         );
-        //TODO: create job
+
+        let local_job = ffi::create_local_job(&object);
+        local_job.set_operation("x-gdu-create-disk-image");
+        // Translators: this is the description of the job
+        local_job.set_description(gettext("Creating Disk Image"));
+        local_job.set_progress_valid(true);
+        local_job.set_cancelable(true);
+        imp.local_job.replace(Some(local_job));
 
         let copy_res = self
             .copy_device(&device, &block, &drive, &mut output_file)
@@ -273,6 +286,11 @@ impl GduCreateDiskImageDialog {
 
         self.play_complete_sound();
         self.update_job(None, true);
+
+        // clear job
+        if let Some(job) = imp.local_job.take() {
+            ffi::destroy_local_job(job);
+        }
 
         let (zero_bytes, block_size) = copy_res.unwrap();
         if zero_bytes > 0 {
@@ -398,8 +416,7 @@ impl GduCreateDiskImageDialog {
                 if bytes_completed > 0 {
                     estimator.add_sample(bytes_completed);
                 }
-                //TODO: add a progress bar?
-                //TODO: update
+                self.update_job(Some(&estimator), false);
             }
 
             //TODO: check if using kernel calls like std's (file) copy does is faster
@@ -431,7 +448,11 @@ impl GduCreateDiskImageDialog {
         Ok((padded_bytes, block_device_size))
     }
 
-    fn update_job(&self, estimator: Option<&GduEstimator>, done: bool) {
+    fn update_job(&self, estimator: Option<&Estimator>, done: bool) {
+        let Some(ref mut job) = *self.imp().local_job.borrow_mut() else {
+            return;
+        };
+
         let (bytes_per_sec, usec_remaining, completed_bytes, target_bytes) =
             if let Some(estimator) = estimator {
                 (
@@ -443,7 +464,25 @@ impl GduCreateDiskImageDialog {
             } else {
                 (0, 0, 0, 0)
             };
-        //TODO: update job
+
+        job.set_bytes(target_bytes);
+        job.set_rate(bytes_per_sec);
+
+        let progress = if done {
+            1.0
+        } else if target_bytes != 0 {
+            completed_bytes as f64 / target_bytes as f64
+        } else {
+            0.0
+        };
+        job.set_progress(progress);
+
+        let end_time = if usec_remaining == 0 {
+            0
+        } else {
+            usec_remaining + glib::real_time() as u64
+        };
+        job.set_expected_end_time(end_time);
     }
 }
 
