@@ -119,9 +119,9 @@ impl GduCreateDiskImageDialog {
         imp.client.replace(Some(client));
         imp.object.replace(Some(object));
 
-        let directory_path =
+        let documents_dir =
             glib::user_special_dir(glib::UserDirectory::Documents).unwrap_or_default();
-        dialog.update_directory(directory_path);
+        dialog.update_directory(documents_dir);
 
         dialog.present(parent_window);
     }
@@ -185,10 +185,10 @@ impl GduCreateDiskImageDialog {
 
     #[template_callback]
     async fn on_choose_folder_button_clicked_cb(&self) {
-        let directory_path = self.imp().directory_path.borrow();
+        let directory_path = self.imp().directory_path.borrow().clone();
         let file_dialog = gtk::FileDialog::builder()
             .title(gettext("Choose a location to save the disk image."))
-            .initial_folder(&gio::File::for_path(&*directory_path))
+            .initial_folder(&gio::File::for_path(directory_path))
             .build();
         if let Some(file_path) = file_dialog
             .select_folder_future(self.window().as_ref())
