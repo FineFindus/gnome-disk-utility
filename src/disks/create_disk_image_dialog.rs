@@ -227,17 +227,20 @@ impl GduCreateDiskImageDialog {
 
     pub async fn create_disk_image(&self) -> Option<()> {
         let imp = self.imp();
-        // it's fine to steal the values here, since the dialog will close after this operation
-        let object = imp.object.take()?;
-        let block = imp.block.take()?;
-        let drive = imp.drive.take()?;
+        let object = imp.object.borrow().clone()?;
+        let block = imp.block.borrow().clone()?;
+        let drive = imp.drive.borrow().clone()?;
         let device = block
             .device()
             .await
             .ok()
             .and_then(|dev| CString::from_vec_with_nul(dev).ok())
             .and_then(|dev| dev.to_str().map(|p| p.to_string()).ok())?;
+
+        // we don't need to unmount optical drives etc., as we're only reading
         if !device.starts_with("/dev/sr") {
+            // ensure that no other device can write data, whilst we're trying to create an image of
+            // it
             libgdu::ensure_unused(&self.client(), self, &object)
                 .await
                 .expect("`object` should be unused");
@@ -300,7 +303,7 @@ impl GduCreateDiskImageDialog {
             ffi::destroy_local_job(job);
         }
 
-        let (zero_bytes, block_size) = copy_res.unwrap();
+        let (zero_bytes, block_size) = copy_res.ok()?;
         if zero_bytes > 0 {
             let percentage = 100.0 * zero_bytes as f64 / block_size as f64;
             //TODO: also show this when another error occurred?
@@ -321,8 +324,7 @@ impl GduCreateDiskImageDialog {
                 return None;
             }
 
-            //TODO: use async remove?
-            if let Err(err) = std::fs::remove_file(&output_file_path) {
+            if let Err(err) = async_std::fs::remove_file(&output_file_path).await {
                 log::error!(
                     "Error deleting file: {} ({})",
                     output_file_path.display(),
