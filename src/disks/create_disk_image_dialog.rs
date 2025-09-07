@@ -12,8 +12,8 @@ use gtk::{gio, glib};
 use libgdu::gettext::gettext_f;
 
 use crate::estimator::Estimator;
-use crate::ffi;
 use crate::page_aligned_buffer::PageAlignedBuffer;
+use crate::{ffi, syscalls};
 
 /// State of the [`GduCreateDiskImageDialog::local_job`].
 enum JobState {
@@ -368,22 +368,7 @@ impl GduCreateDiskImageDialog {
         // We can't use udisks_block_get_size() because the media may have
         // changed and udisks may not have noticed. TODO: maybe have a
         // Block.GetSize() method instead...
-
-        // https://github.com/topjohnwu/Magisk/blob/33f70f8f6df24f66f7da9ad855cd4f7fe72c37a9/native/src/base/files.rs#L908
-        #[cfg(target_pointer_width = "32")]
-        const BLKGETSIZE64: u64 = 0x80041272;
-        #[cfg(target_pointer_width = "64")]
-        const BLKGETSIZE64: u64 = 0x80081272;
-
-        // TODO: this is also used in restore dialog, abstract this to a common implementation
-        let mut block_device_size: u64 = 0;
-        if unsafe { libc::ioctl(device.as_raw_fd(), BLKGETSIZE64, &mut block_device_size) } != 0 {
-            log::error!("Error determining size of device");
-            return Err(Box::new(std::io::Error::from(
-                std::io::ErrorKind::InvalidData,
-            )));
-        }
-
+        let block_device_size: u64 = syscalls::device_size(&device)?;
         if block_device_size == 0 {
             log::error!("Device is size 0");
             return Err(Box::new(std::io::Error::from(

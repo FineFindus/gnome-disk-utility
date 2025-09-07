@@ -1,10 +1,11 @@
 mod config;
 
+mod create_disk_image_dialog;
 mod estimator;
 mod ffi;
 mod gdu_combo_row;
 mod localjob;
 mod page_aligned_buffer;
 mod restore_disk_image_dialog;
-mod create_disk_image_dialog;
+mod syscalls;
 pub use restore_disk_image_dialog::GduRestoreDiskImageDialog;
