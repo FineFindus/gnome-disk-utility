@@ -195,23 +195,21 @@ impl GduCreateDiskImageDialog {
         let name = self.imp().name_entry.text();
         let directory = self.imp().directory_path.borrow().clone();
         let file = directory.join(&name);
-        if !file.exists() {
-            self.create_disk_image().await;
-            return;
-        }
 
-        let confirmation_dialog = libgdu::ConfirmationDialog {
-            message: gettext("Replace File?"),
-            description: gettext_f(
-                "A file named “{}” already exists in {}",
-                [name.as_str(), &libgdu::unfuse_path(&directory.as_path())],
-            ),
-            reponse_verb: gettext("Replace"),
-            reponse_appearance: adw::ResponseAppearance::Destructive,
-        };
-        let response = confirmation_dialog.show(self, gtk::Widget::NONE).await;
-        if response == libgdu::ConfirmationDialogResponse::Cancel {
-            return;
+        if file.exists() {
+            let confirmation_dialog = libgdu::ConfirmationDialog {
+                message: gettext("Replace File?"),
+                description: gettext_f(
+                    "A file named “{}” already exists in {}",
+                    [name.as_str(), &libgdu::unfuse_path(&directory.as_path())],
+                ),
+                reponse_verb: gettext("Replace"),
+                reponse_appearance: adw::ResponseAppearance::Destructive,
+            };
+            let response = confirmation_dialog.show(self, gtk::Widget::NONE).await;
+            if response == libgdu::ConfirmationDialogResponse::Cancel {
+                return;
+            }
         }
 
         self.create_disk_image().await;
