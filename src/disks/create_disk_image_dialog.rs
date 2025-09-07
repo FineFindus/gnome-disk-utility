@@ -15,6 +15,16 @@ use crate::estimator::Estimator;
 use crate::ffi;
 use crate::page_aligned_buffer::PageAlignedBuffer;
 
+/// State of the [`GduCreateDiskImageDialog::local_job`].
+enum JobState {
+    /// Job is currently allocating the output file.
+    AllocatingFile,
+    /// Job is currently copying data with `error_bytes`.
+    Copying(usize),
+    /// Job is done.
+    Done,
+}
+
 mod imp {
     use std::{cell::RefCell, rc::Rc};
 
@@ -283,7 +293,7 @@ impl GduCreateDiskImageDialog {
         };
 
         self.play_complete_sound();
-        self.update_job(None, true);
+        self.update_job(None, JobState::Done);
 
         // clear job
         if let Some(job) = imp.local_job.take() {
@@ -381,6 +391,8 @@ impl GduCreateDiskImageDialog {
             )));
         }
 
+        // try to allocate the whole file at once, to ensure that the blocks are contiguous
+        self.update_job(None, JobState::AllocatingFile);
         match allocate_file_size(output_file, block_device_size as i64) {
             // kernel or filesystem does not support fallocate, ignore
             Ok(()) | Err(libc::ENOSYS | libc::EOPNOTSUPP) => {
@@ -414,18 +426,14 @@ impl GduCreateDiskImageDialog {
                 if bytes_completed > 0 {
                     estimator.add_sample(bytes_completed);
                 }
-                self.update_job(Some(&estimator), false);
+                self.update_job(Some(&estimator), JobState::Copying(padded_bytes));
             }
 
-            //TODO: check if using kernel calls like std's (file) copy does is faster
-            //or using BufWriter
-            //or BufReader
             let read_bytes = match device.read(buffer).await {
                 // we finished reading all bytes
                 Ok(0) => break,
                 Ok(n) if n < buffer.len() => {
                     // if we read less bytes than expected, pad the rest with 0
-                    // TODO: check if this is correct, or an off-by-one error
                     buffer[n..].fill(0);
                     padded_bytes += buffer.len() - n;
                     buffer.len()
@@ -446,7 +454,7 @@ impl GduCreateDiskImageDialog {
         Ok((padded_bytes, block_device_size))
     }
 
-    fn update_job(&self, estimator: Option<&Estimator>, done: bool) {
+    fn update_job(&self, estimator: Option<&Estimator>, state: JobState) {
         let Some(ref mut job) = *self.imp().local_job.borrow_mut() else {
             return;
         };
@@ -463,10 +471,26 @@ impl GduCreateDiskImageDialog {
                 (0, 0, 0, 0)
             };
 
+        match state {
+            JobState::AllocatingFile => job.set_extra_markup(gettext("Allocating Disk Image")),
+            JobState::Copying(error_bytes) => {
+                job.set_extra_markup(format!(
+                    "<span foreground=\"#ff0000\">{}</span>",
+                    // Translators: Shown when there are read errors and we skip some data.
+                    // The first %s is the amount of unreadable data (ex. "512 kB").
+                    gettext_f(
+                        "{} unreadable (replaced with zeroes)",
+                        [error_bytes.to_string()]
+                    ),
+                ))
+            }
+            JobState::Done => {}
+        }
+
         job.set_bytes(target_bytes);
         job.set_rate(bytes_per_sec);
 
-        let progress = if done {
+        let progress = if matches!(state, JobState::Done) {
             1.0
         } else if target_bytes != 0 {
             completed_bytes as f64 / target_bytes as f64
@@ -489,7 +513,7 @@ impl GduCreateDiskImageDialog {
 /// # Errors
 ///
 /// Returns the error code of the underlying `fallocate` call.
-fn allocate_file_size(file: &mut async_std::fs::File, size: i64) -> Result<(), i32> {
+fn allocate_file_size(file: &mut impl AsRawFd, size: i64) -> Result<(), i32> {
     if unsafe { libc::fallocate(file.as_raw_fd(), 0, 0, size) } != 0 {
         return Err(std::io::Error::last_os_error()
             .raw_os_error()
