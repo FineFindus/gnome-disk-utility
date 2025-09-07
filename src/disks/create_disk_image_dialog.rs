@@ -146,8 +146,8 @@ impl GduCreateDiskImageDialog {
             .replacen("/dev/", "", 1)
             .replace("/", "_");
 
-        let fstype = block.id_type().await.unwrap_or_default();
-        let fslabel = block.id_label().await.unwrap_or_default();
+        let fstype = block.id_type().await.ok()?;
+        let fslabel = block.id_label().await.ok()?;
         let proposed_filename = if (fstype == "iso9660" || fstype == "udf") && !fslabel.is_empty() {
             format!("{}.iso", fslabel)
         } else {
