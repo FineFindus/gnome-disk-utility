@@ -5,8 +5,9 @@ use std::os::fd::AsFd;
 use std::path::PathBuf;
 
 use adw::prelude::AdwDialogExt;
-use anyhow::anyhow;
 use anyhow::Context;
+use anyhow::anyhow;
+use futures_util::StreamExt;
 use gettextrs::gettext;
 use gtk::prelude::FileExt;
 use gtk::prelude::GtkWindowExt;
@@ -15,7 +16,6 @@ use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use udisks::zbus;
 use udisks::zbus::zvariant::{OwnedObjectPath, Value};
-use zbus::export::futures_util::StreamExt;
 
 use crate::application::ImageMounterApplication;
 

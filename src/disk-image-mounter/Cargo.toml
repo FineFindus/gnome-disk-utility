@@ -20,6 +20,7 @@ gettext-rs.workspace = true
 adw.workspace = true
 async-channel = "2.3.1"
 anyhow = "1.0.86"
+futures-util = "0.3.31"
 libgdu = { path = "../libgdu", version = "0.1.0" }
 # disk restore dialog
 gnome-disks = { path = "../disks", version = "0.1.0" }

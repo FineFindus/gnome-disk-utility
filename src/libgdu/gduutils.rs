@@ -6,6 +6,7 @@ use std::mem::MaybeUninit;
 use std::sync::OnceLock;
 
 use adw::prelude::*;
+use enumflags2::{BitFlag, BitFlags};
 use futures::StreamExt;
 use gettextrs::{dngettext, gettext, pgettext};
 use gtk::{
@@ -14,13 +15,16 @@ use gtk::{
 };
 use itertools::Itertools;
 use tokio::sync::Mutex;
-use udisks::zbus::{
-    self,
-    zvariant::{self, OwnedValue},
+use udisks::{
+    manager::ResizeFlags,
+    zbus::{
+        self,
+        zvariant::{self, OwnedValue},
+    },
 };
 
 use crate::config::GETTEXT_PACKAGE;
-use crate::enums::{GduFormatDurationFlags, ResizeFlags, UnitSize};
+use crate::enums::{GduFormatDurationFlags, UnitSize};
 use crate::gettext::pgettext_f;
 
 pub const PARTITION_COLORS: [&str; 7] = [
@@ -388,7 +392,21 @@ pub async fn is_flash(drive: &udisks::drive::DriveProxy<'static>) -> bool {
         .await
         .iter()
         .flatten()
-        .any(|compat| compat.starts_with("flash"))
+        .any(|compat| {
+            matches!(
+                compat,
+                udisks::drive::MediaCompatibility::Flash
+                    | udisks::drive::MediaCompatibility::FlashCf
+                    | udisks::drive::MediaCompatibility::FlashMs
+                    | udisks::drive::MediaCompatibility::FlashSm
+                    | udisks::drive::MediaCompatibility::FlashSd
+                    | udisks::drive::MediaCompatibility::FlashSdhc
+                    | udisks::drive::MediaCompatibility::FlashSdxc
+                    | udisks::drive::MediaCompatibility::FlashSdio
+                    | udisks::drive::MediaCompatibility::FlashSdCombo
+                    | udisks::drive::MediaCompatibility::FlashMmc
+            )
+        })
 }
 
 pub async fn count_primary_dos_partitions(
@@ -555,15 +573,15 @@ impl ConfirmationDialog {
 struct CacheEntry {
     available: bool,
     missing_util: String,
-    mode: ResizeFlags,
+    mode: BitFlags<ResizeFlags>,
 }
 
-impl From<(bool, u64, String)> for CacheEntry {
-    fn from((available, mode, missing_util): (bool, u64, String)) -> Self {
+impl From<(bool, BitFlags<ResizeFlags>, String)> for CacheEntry {
+    fn from((available, mode, missing_util): (bool, BitFlags<ResizeFlags>, String)) -> Self {
         Self {
             available,
             missing_util,
-            mode: ResizeFlags::from_bits(mode as u32).unwrap(),
+            mode,
         }
     }
 }
@@ -573,7 +591,7 @@ impl From<(bool, String)> for CacheEntry {
         Self {
             available,
             missing_util,
-            mode: ResizeFlags::empty(),
+            mode: udisks::manager::ResizeFlags::empty(),
         }
     }
 }
@@ -585,7 +603,7 @@ pub async fn can_resize(
     client: &udisks::Client,
     fstype: &str,
     flush: bool,
-) -> Option<(bool, ResizeFlags, String)> {
+) -> Option<(bool, BitFlags<ResizeFlags>, String)> {
     // utility for creating a static HashMap, working around the fact that HashMap::new is
     // non-const
     let cache = {

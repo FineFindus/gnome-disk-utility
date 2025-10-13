@@ -7,15 +7,6 @@ pub enum GduFormatDurationFlags {
     NoSeconds = (1 << 1),
 }
 
-// from libblockdev
-#[glib::flags(name = "MyFlags")]
-pub enum ResizeFlags {
-    OfflineShrink = 1 << 1,
-    OfflineGrow = 1 << 2,
-    OnlineShrink = 1 << 3,
-    OnlineGrow = 1 << 4,
-}
-
 #[derive(Debug, Clone, Copy)]
 #[repr(u32)]
 pub enum UnitSize {
