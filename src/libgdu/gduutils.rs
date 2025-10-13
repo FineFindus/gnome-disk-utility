@@ -6,7 +6,6 @@ use std::mem::MaybeUninit;
 use std::sync::OnceLock;
 
 use adw::prelude::*;
-use async_recursion::async_recursion;
 use futures::StreamExt;
 use gettextrs::{dngettext, gettext, pgettext};
 use gtk::{
@@ -873,7 +872,6 @@ pub async fn is_in_use(client: &udisks::Client, object: &udisks::Object) -> bool
     is_in_full_use(client, object, false).await.is_ok()
 }
 
-#[async_recursion]
 pub async fn unuse_data_iterate(
     client: &udisks::Client,
     object: &udisks::Object,
@@ -896,7 +894,7 @@ pub async fn unuse_data_iterate(
                         .map_err(|err| {
                             (err, gettext("Error disabling autoclear for loop device"))
                         })?;
-                    unuse_data_iterate(client, object).await?;
+                   Box::pin(unuse_data_iterate(client, object)).await?;
                     return Ok(());
                 }
             }
@@ -908,13 +906,13 @@ pub async fn unuse_data_iterate(
             .unmount(HashMap::new())
             .await
             .map_err(|err| (err, gettext("Error unmounting filesystem")))?;
-        unuse_data_iterate(client, object).await?;
+        Box::pin(unuse_data_iterate(client, object)).await?;
     } else if let Some(encrypted_to_lock) = encrypted_to_lock {
         encrypted_to_lock
             .lock(HashMap::new())
             .await
             .map_err(|err| (err, gettext("Error locking device")))?;
-        unuse_data_iterate(client, object).await?;
+        Box::pin(unuse_data_iterate(client, object)).await?;
     }
     Ok(())
 }
