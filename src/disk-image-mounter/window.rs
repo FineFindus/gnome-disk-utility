@@ -107,30 +107,41 @@ mod imp {
             }
 
             let main_context = glib::MainContext::default();
-            main_context.spawn_local(
-                glib::clone!(@weak self as window => @default-return None, async move {
+            main_context.spawn_local(glib::clone!(
+                #[weak(rename_to = window)]
+                self,
+                #[upgrade_or]
+                None,
+                async move {
                     if !window.obj().mountable(window.file.borrow().as_ref()) {
-                        window.status_page.set_description(Some(&gettext("Compressed image files are not mountable")));
+                        window.status_page.set_description(Some(&gettext(
+                            "Compressed image files are not mountable",
+                        )));
                         window.obj().set_continue_action(Action::Write);
                         return None;
                     }
 
-                    let object = window.obj().mounted_file_object()
-                        .await?;
+                    let object = window.obj().mounted_file_object().await?;
                     window.unmount_row.set_visible(true);
-                    window.open_files_row.set_subtitle(&gettext("Open the mounted image"));
+                    window
+                        .open_files_row
+                        .set_subtitle(&gettext("Open the mounted image"));
 
                     if object.block().await.ok()?.read_only().await.ok()? {
-                        window.status_page.set_description(Some(&gettext("Already mounted read-only")));
+                        window
+                            .status_page
+                            .set_description(Some(&gettext("Already mounted read-only")));
                         window.open_files_edit_row.set_sensitive(false);
                     } else {
-                        window.status_page.set_description(Some(&gettext("Already mounted")));
+                        window
+                            .status_page
+                            .set_description(Some(&gettext("Already mounted")));
                         window.obj().set_continue_action(Action::Unmount);
                         window.open_files_row.set_sensitive(false);
                     }
                     None::<()>
-                }),
-            );
+                }
+            ));
         }
     }
 
@@ -143,7 +154,7 @@ mod imp {
 glib::wrapper! {
     pub struct ImageMounterWindow(ObjectSubclass<imp::ImageMounterWindow>)
         @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,
-        @implements gio::ActionMap, gio::ActionGroup, gtk::Root;
+        @implements gio::ActionMap, gio::ActionGroup, gtk::Native, gtk::Root, gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::ShortcutManager;
 }
 
 #[gtk::template_callbacks]
@@ -186,7 +197,7 @@ impl ImageMounterWindow {
     fn mountable(&self, file: Option<&gio::File>) -> bool {
         let Some(file) = file else { return false };
         // may return wrong type, see https://github.com/gtk-rs/gtk-rs-core/issues/1257
-        let (content_type, _uncertain) = gio::content_type_guess(file.path().as_ref(), &[]);
+        let (content_type, _uncertain) = gio::content_type_guess(file.path().as_ref(), None);
         // explicitly deny mime types, rather than allowing them, as some may be reported wrong
         // and we want to allow mounting obfuscated VeraCrypt images
         content_type != "application/x-raw-disk-image-xz-compressed"

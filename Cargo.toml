@@ -17,9 +17,9 @@ codegen-units = 1
 log = "0.4"
 env_logger = "0.11.2"
 gettext-rs = { version = "0.7", features = ["gettext-system"] }
-gtk = { version = "0.8", package = "gtk4", features = [
-    "v4_12",
+gtk = { version = "0.10", package = "gtk4", features = [
+    "v4_16",
     "xml_validation",
 ] }
-adw = { package = "libadwaita", version = "0.6", features = ["v1_5"] }
+adw = { package = "libadwaita", version = "0.8", features = ["v1_8"] }
 udisks = { package = "udisks2", git = "https://github.com/FineFindus/udisks-rs.git", rev = "849810010d2eb5c4266278cf19fc82acf0fb1733" }

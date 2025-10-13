@@ -129,7 +129,7 @@ mod imp {
 glib::wrapper! {
     pub struct GduRestoreDiskImageDialog(ObjectSubclass<imp::GduRestoreDiskImageDialog>)
         @extends gtk::Widget, adw::Dialog,
-        @implements gio::ActionMap, gio::ActionGroup, gtk::Root;
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 #[gtk::template_callbacks]
@@ -165,7 +165,7 @@ impl GduRestoreDiskImageDialog {
         }
 
         dialog.display_size_warning();
-        dialog.present(parent_window);
+        dialog.present(Some(parent_window));
         dialog
     }
 
