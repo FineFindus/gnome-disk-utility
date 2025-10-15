@@ -4,7 +4,7 @@ use std::ops::Sub;
 use std::os::fd::{AsRawFd, OwnedFd};
 
 use adw::prelude::*;
-use async_std::io::{ReadExt, WriteExt};
+use futures::io::{AsyncReadExt, AsyncWriteExt};
 use gettextrs::{gettext, pgettext};
 use gtk::glib::property::PropertySet;
 use gtk::subclass::prelude::*;
@@ -507,7 +507,7 @@ impl GduRestoreDiskImageDialog {
     async fn copy_disk_image(
         &self,
         block: udisks::block::BlockProxy<'static>,
-        input_stream: &mut (impl async_std::io::Read + std::marker::Unpin),
+        input_stream: &mut (impl futures::io::AsyncRead + std::marker::Unpin),
         input_size: u64,
         // we return a boxed error so we can return different error types
         // we don't use anyhow here, as the show error function expects a box
@@ -541,7 +541,7 @@ impl GduRestoreDiskImageDialog {
         let update_interval = std::time::Duration::from_millis(200);
         // set initial timer back by the update interval, so the UI is refreshed on the first cycle
         let update_timer = std::time::Instant::now().sub(update_interval);
-        let mut device = async_std::fs::File::from(std::fs::File::from(fd));
+        let mut device = async_fs::File::from(std::fs::File::from(fd));
         let copy_result: Result<(), std::io::Error> = loop {
             // update GUI
             if update_timer.elapsed() >= update_interval {
