@@ -900,22 +900,20 @@ pub async fn unuse_data_iterate(
 
     let block = object.block().await;
 
-    if block.is_ok() && (filesystem_to_unmount.is_some() || encrypted_to_lock.is_some()) {
-        if let Ok(loop_) = client.loop_for_block(&block.unwrap()).await {
-            if loop_.autoclear().await.is_ok_and(|res| res) {
-                let loop_object = client.object(loop_.inner().path().clone()).unwrap();
-                let (_fs, _enc, last) = is_in_full_use(client, &loop_object, true).await.unwrap();
-                if last {
-                    loop_
-                        .set_autoclear(false, HashMap::new())
-                        .await
-                        .map_err(|err| {
-                            (err, gettext("Error disabling autoclear for loop device"))
-                        })?;
-                    Box::pin(unuse_data_iterate(client, object)).await?;
-                    return Ok(());
-                }
-            }
+    if let Ok(block) = block
+        && (filesystem_to_unmount.is_some() || encrypted_to_lock.is_some())
+        && let Ok(loop_) = client.loop_for_block(&block).await
+        && loop_.autoclear().await == Ok(true)
+    {
+        let loop_object = client.object(loop_.inner().path().clone()).unwrap();
+        let (_fs, _enc, last) = is_in_full_use(client, &loop_object, true).await.unwrap();
+        if last {
+            loop_
+                .set_autoclear(false, HashMap::new())
+                .await
+                .map_err(|err| (err, gettext("Error disabling autoclear for loop device")))?;
+            Box::pin(unuse_data_iterate(client, object)).await?;
+            return Ok(());
         }
     }
 

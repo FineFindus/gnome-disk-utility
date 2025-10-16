@@ -5,11 +5,12 @@ use std::os::fd::AsRawFd;
 use std::path::PathBuf;
 
 use adw::prelude::*;
-use async_std::io::{ReadExt, WriteExt};
+use futures::io::{AsyncReadExt, AsyncWriteExt};
 use gettextrs::{gettext, pgettext};
 use gtk::subclass::prelude::*;
 use gtk::{gio, glib};
 use libgdu::gettext::gettext_f;
+use udisks::drive::MediaCompatibility;
 
 use crate::estimator::Estimator;
 use crate::page_aligned_buffer::PageAlignedBuffer;
@@ -95,7 +96,7 @@ mod imp {
 glib::wrapper! {
     pub struct GduCreateDiskImageDialog(ObjectSubclass<imp::GduCreateDiskImageDialog>)
         @extends gtk::Widget, adw::Dialog,
-        @implements gio::ActionMap, gio::ActionGroup, gtk::Root;
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget;
 }
 
 #[gtk::template_callbacks]
@@ -123,7 +124,7 @@ impl GduCreateDiskImageDialog {
             glib::user_special_dir(glib::UserDirectory::Documents).unwrap_or_default();
         dialog.update_directory(documents_dir);
 
-        dialog.present(parent_window);
+        dialog.present(Some(parent_window));
     }
 
     /// Returns a the [`gtk::Window`] of the dialog.
@@ -249,7 +250,7 @@ impl GduCreateDiskImageDialog {
         let name = imp.name_entry.text();
         let mut output_file_path = imp.directory_path.take();
         output_file_path.push(&name);
-        let mut output_file = match async_std::fs::File::create(&output_file_path).await {
+        let mut output_file = match async_fs::File::create(&output_file_path).await {
             Ok(file) => file,
             Err(err) => {
                 libgdu::show_error(
@@ -324,7 +325,7 @@ impl GduCreateDiskImageDialog {
                 return None;
             }
 
-            if let Err(err) = async_std::fs::remove_file(&output_file_path).await {
+            if let Err(err) = async_fs::remove_file(&output_file_path).await {
                 log::error!(
                     "Error deleting file: {} ({})",
                     output_file_path.display(),
@@ -343,16 +344,16 @@ impl GduCreateDiskImageDialog {
         device: &str,
         block: &udisks::block::BlockProxy<'static>,
         drive: &udisks::drive::DriveProxy<'static>,
-        output_file: &mut async_std::fs::File,
+        output_file: &mut async_fs::File,
     ) -> Result<(usize, u64), Box<dyn std::error::Error>> {
-        let mut device: async_std::fs::File = if device.starts_with("/dev/sr") {
+        let mut device: async_fs::File = if device.starts_with("/dev/sr") {
             let file = std::fs::File::open(device)?;
             if block.id_usage().await.is_ok_and(|id| id == "filesystem")
                 && block.id_type().await.is_ok_and(|id| id == "udf")
                 && drive
                     .media()
                     .await
-                    .is_ok_and(|media| media == "optical_drive")
+                    .is_ok_and(|media| media == MediaCompatibility::OpticalDvd)
             {
                 todo!("Handle libdvdcss");
             }
